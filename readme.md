@@ -1,3 +1,3 @@
 various aspects of could operations
 
-- [VMware](./VMware)
+- [VMware](./VMware/readme.md)
