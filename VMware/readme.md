@@ -90,3 +90,152 @@ govc permissions.set -role  ReadOnly --principal=monitor@vc.local
 1.5 adjust modules(the sequence, and remove useless modules) in sections such as `cloud_init_modules`,`cloud_config_modules`,`cloud_final_modules`, even change the modules in these sections.
 
 1.6 install other software that as needed, for example monitoring agent.
+
+
+
+
+## 2. create VM with terraform
+
+2.1 create `userdata` to configure the instance
+```yaml
+#cloud-config
+hostname:  dc1-vm-prometheus-prod01
+
+
+system_info:
+  default_user:
+   name: vscloud
+   home: /home/vscloud
+   shell: /bin/bash
+   gecos: Centos vSphere
+   groups: [adm, root,wheel]
+   sudo:  ALL=(ALL) ALL
+   ssh_authorized_keys:
+   - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDBJkrhbsq0e02D5SHl+veUsoQW5EVY5ROr3Wm+Uc4aFb4vCMUfT4koKau5j5wHCBe5gqDkx55uzbD/xvsHUSn4NY0hzspBMy4cHQw5SvpLb5brArKk2TP1C3HMJRv+K8N9we9Hk6dbf9VgSQmPcp6uHUKgfd42h4sAlQJVO
+VoS73wTcP4Gg8x4ePnYW2Nd8moUpS+eCMyj/pj0hnMyK9B14E17Hb+89f0NU7LrweqZlieoYuuZLgCMzq1mThW2ES2kTx1CGnyz0iicPbENdezNF7J4Po0bEWjjSS1cW1Lj3pREbEpIM/vsJJLdF8ZME7Zp1EWXLBhrJcqX1zTf0Jx vscloud
+
+chpasswd:
+    list:
+        - vscloud:$6$.7Lt.WZiFe7Wphgs$bxXXMacpMFzUzpi23p.ITL0h7DLH9orJj5nid3Id2wR3fld9.voFGUlJQTXotu8qr53q68e3GAPZ7QViBbAXe1
+
+growpart:
+  mode: growpart
+  devices: [ '/dev/sda2' ]
+
+resize_rootfs: true
+
+disk_setup:
+    /dev/sdb:
+         table_type: mbr
+         layout: True
+         overwrite: True
+
+runcmd:
+  - [ cloud-init-per, once, create_pv, pvcreate, /dev/sdb1 ]
+  - [ cloud-init-per, once, create_vg, vgcreate, datavg, /dev/sdb1 ]
+  - [ cloud-init-per, once, create_lv, lvcreate,-l, 100%VG,-n,datalv,datavg]
+  - [ cloud-init-per, once, create_fs, mkfs,-t, ext4,/dev/mapper/datavg-datalv]
+  - [ cloud-init-per, once, create_mount_point,mkdir,/data]
+  - [ cloud-init-per, once, mount_data, mount,/dev/mapper/datavg-datalv,/data]
+
+mounts:
+ - [ /dev/mapper/datavg-datalv, /data, "ext4", "defaults", "0", "0" ]
+
+timezone: Asia/Chongqing
+
+ntp:
+  enabled: true
+  ntp_client: chrony
+  servers:
+    - 120.25.115.20
+    - 203.107.6.88
+
+
+manage_resolv_conf: true
+resolv_conf:
+    nameservers:
+    - 114.114.114.114
+    - 223.5.5.5
+    - 119.29.29.29
+    options:
+        rotate: true
+        timeout: 1
+```
+
+
+2.2 create template for userdata 
+```yaml
+data "template_file" "cloudinit_userdata" {
+  template ="/opt/terraform/cloudinit_userdata"
+  template ="${file("/opt/terraform/cloudinit_userdata")}"
+}
+
+data "template_cloudinit_config" "cloudinit_userdata" {
+  gzip          = true
+  base64_encode = true
+  part {
+    content_type = "text/cloud-config"
+    content = "${data.template_file.cloudinit_userdata.rendered}"
+  }
+}
+```
+
+2.3 in the vsphere_virtual_machine to add extra_config to include this userdata
+```yaml
+resource "vsphere_virtual_machine" "instance" {
+  name             = "dc1-vm-prometheus-prod01"
+  resource_pool_id = "${data.vsphere_resource_pool.pool.id}"
+  datastore_id     = "${data.vsphere_datastore.datastore_os.id}"
+
+  num_cpus = "4"
+  memory   = "8192"
+  guest_id = "${data.vsphere_virtual_machine.template.guest_id}"
+
+  scsi_type = "${data.vsphere_virtual_machine.template.scsi_type}"
+
+  network_interface {
+    network_id   = "${data.vsphere_network.network_VLAN101.id}"
+  }
+
+  disk {
+    label            = "os"
+    size             = "70"
+    unit_number      =  "0"
+    datastore_id     = "${data.vsphere_datastore.datastore_os.id}"
+    }
+  disk {
+    label            = "data"
+    size             = "100"
+    unit_number      =  "1"
+    datastore_id     = "${data.vsphere_datastore.datastore_data.id}"
+    }
+
+  cdrom {
+    client_device = true
+  }
+
+  extra_config {
+    "guestinfo.userdata"          = "${base64gzip(data.template_file.cloudinit_userdata.rendered)}"
+    "guestinfo.userdata.encoding" = "gzip+base64"
+  }
+
+  clone {
+    template_uuid = "${data.vsphere_virtual_machine.template.id}"
+
+    customize {
+      linux_options {
+        host_name = "dc1-vm-prometheus-prod01"
+        domain = "xywlty.com"
+      }
+      network_interface {
+        ipv4_address = "10.36.52.150"
+        ipv4_netmask = "25"
+      }
+      ipv4_gateway = "10.36.52.129"
+
+    }
+  }
+}
+```
+
+2.3 use terraform apply to create instance, then when instance is started, cloud-init will begin to customize it as our need.
