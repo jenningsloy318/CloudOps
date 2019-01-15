@@ -257,6 +257,8 @@ create a ansible role `ansible-role-vcenter-clone-vm`
     template: "{{item.template}}"
     name: "{{ item.vm_name }}"
     cluster: "{{ item.vm_cluster|default('Cluster01') }}"
+    cdrom:
+      type: client
     disk:
     - size_gb: "{{item.disks[0].size}}"
       datastore: "{{item.disks[0].datastore}}"
@@ -361,7 +363,7 @@ vm_list:
   - ansible-role-vcenter-clone-vm
   vars:
   - vcenter_hostname: 10.36.51.11
-  - vcenter_username: "administrator@sapcae.com"
+  - vcenter_username: "administrator@lmy.com"
   - vcenter_password: "Devops@2018"
   - vcenter_datacenter: DC1
   - vm_list:
