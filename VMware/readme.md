@@ -147,17 +147,6 @@ ntp:
   servers:
     - 120.25.115.20
     - 203.107.6.88
-
-
-manage_resolv_conf: true
-resolv_conf:
-    nameservers:
-    - 114.114.114.114
-    - 223.5.5.5
-    - 119.29.29.29
-    options:
-        rotate: true
-        timeout: 1
 ```
 
 
@@ -230,6 +219,8 @@ resource "vsphere_virtual_machine" "instance" {
         ipv4_netmask = "25"
       }
       ipv4_gateway = "10.36.52.129"
+      dns_server_list =["114.114.114.114","223.5.5.5","119.29.29.29"]
+
 
     }
   }
