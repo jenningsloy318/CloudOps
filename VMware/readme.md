@@ -45,8 +45,6 @@ govc permissions.set -role  ReadOnly --principal=monitor@vc.local
   systemctl stop rsyslog
   systemctl stop auditd
   systemctl disable autitd
-  # remove duplicate cloud-init conf
-  rm -f /etc/cloud/cloud.cfg.d/99-DataSourceVMwareGuestInfo.cfg
   # enable cloud-init services
   systemctl enable cloud-init
   #remove old kernels
@@ -75,14 +73,14 @@ govc permissions.set -role  ReadOnly --principal=monitor@vc.local
   /bin/rm -rf ~root/.ssh/
   ```
 
-1.3 configure  datasource for cloud-init, instance retrieve data from `VMwareGuestInfo` provided by [cloud-init-vmware-guestinfo](https://github.com/akutz/cloud-init-vmware-guestinfo), add following content to `/etc/cloud/cloud.cfg`, and remove other datasource setting
+1.3 configure  datasource for cloud-init, instance retrieve data from `VMwareGuestInfo` provided by [cloud-init-vmware-guestinfo](https://github.com/akutz/cloud-init-vmware-guestinfo), modify `/etc/cloud/cloud.cfg.d/99-DataSourceVMwareGuestInfo.cfg` with following content
   ```yaml
-  datasource_list: [ "VMwareGuestInfo" ]
+  datasource_list: ['VMwareGuestInfo']
   datasource:
-    VMwareGuestInfo：
+    VMwareGuestInfo:
       dsmode: local
   ```
-1.4 disabled network, since we can use vSphere to customize the IP add domain info, create file `/etc/cloud/cloud.cfg.d/06_network.cfg`, and add following content
+1.4 disabled network, since we can use vSphere to customize the IP add domain info, create file `/etc/cloud/cloud.cfg.d/06-network.cfg`, and add following content
   ```yaml
   network:
   config: disabled
@@ -239,3 +237,143 @@ resource "vsphere_virtual_machine" "instance" {
 ```
 
 2.3 use terraform apply to create instance, then when instance is started, cloud-init will begin to customize it as our need.
+
+
+
+
+
+## 2. create VM with ansible
+we can also use ansible to create vm, pass the userdata to `customvalues` with key and value. 
+
+create a ansible role `ansible-role-vcenter-clone-vm`
+
+- `tasks/main.yml`
+```yaml
+- name: encoding userdata
+  shell: gzip -c9 < "{{role_path}}/files/cloudinit_userdata" | base64 -w0
+  register: cloudinit_userdata
+
+- name:  Create virtual machine from templates
+  vmware_guest:
+    hostname: "{{ vcenter_hostname }}"
+    username: "{{ vcenter_username }}"
+    password: "{{ vcenter_password }}"
+    validate_certs: no
+    datacenter: "{{ vcenter_datacenter|default('DC1') }}"
+    state: present
+    folder: "{{item.vm_folder}}"
+    resource_pool: "{{item.vm_resource_pool}}"
+    template: "{{item.template}}"
+    name: "{{ item.vm_name }}"
+    cluster: "{{ item.vm_cluster|default('Cluster01') }}"
+    disk:
+    - size_gb: "{{item.disks[0].size}}"
+      datastore: "{{item.disks[0].datastore}}"
+    - size_gb: "{{item.disks[1].size}}"
+      datastore: "{{item.disks[1].datastore}}"
+    hardware:
+      memory_mb: "{{item.vm_memory_size}}"
+      num_cpus:  "{{item.vm_cpu_count}}"
+      hotadd_cpu: True
+      hotremove_cpu: True
+      hotadd_memory: true
+    networks:
+      - name: "{{item.vm_network}}"
+        ip: "{{item.vm_ip_addr}}"
+        netmask: "{{item.vm_ip_mask}}"
+        gateway: "{{item.vm_ip_gateway}}"
+    wait_for_ip_address: True
+    customization:
+      hostname: "{{item.vm_name}}"
+      dns_servers:
+        - 114.114.114.11
+        - 223.5.5.5
+        - 119.29.29.29
+      domain: xywlty.com
+    customvalues:
+    - key: guestinfo.userdata
+      value: "{{ cloudinit_userdata.stdout }}"
+    - key: guestinfo.userdata.encoding
+      value: "gzip+base64"
+  delegate_to: localhost
+  with_items: "{{vm_list}}"
+```
+- `files/userdata`
+```yaml
+#cloud-config
+system_info:
+  default_user:
+   name: vscloud
+   home: /home/vscloud
+   shell: /bin/bash
+   gecos: Centos vSphere
+   groups: [adm, root,wheel]
+   sudo:  ALL=(ALL) ALL
+   ssh_authorized_keys:
+   - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDBJkrhbsq0e02D5SHl+veUsoQW5EVY5ROr3Wm+Uc4aFb4vCMUfT4koKau5j5wHCBe5gqDkx55uzbD/xvsHUSn4NY0hzspBMy4cHQw5SvpLb5brArKk2TP1C3HMJRv+K8N9we9Hk6dbf9VgSQmPcp6uHUKgfd42h4sAlQJVOVoS73wTcP4Gg8x4ePnYW2Nd8moUpS+eCMyj/pj0hnMyK9B14E17Hb+89f0NU7LrweqZlieoYuuZLgCMzq1mThW2ES2kTx1CGnyz0iicPbENdezNF7J4Po0bEWjjSS1cW1Lj3pREbEpIM/vsJJLdF8ZME7Zp1EWXLBhrJcqX1zTf0Jx vscloud
+
+chpasswd:
+    list:
+        - vscloud:$6$.7Lt.WZiFe7Wphgs$bxXXMacpMFzUzpi23p.ITL0h7DLH9orJj5nid3Id2wR3fld9.voFGUlJQTXotu8qr53q68e3GAPZ7QViBbAXe1
+ 
+growpart:
+  mode: growpart
+  devices: [ '/dev/sda2' ]
+
+resize_rootfs: true
+
+disk_setup:
+    /dev/sdb:
+         table_type: mbr
+         layout: True
+         overwrite: True
+
+runcmd:
+  - [ cloud-init-per, once, create_pv, pvcreate, /dev/sdb1 ]
+  - [ cloud-init-per, once, create_vg, vgcreate, datavg, /dev/sdb1 ]
+  - [ cloud-init-per, once, create_lv, lvcreate,-l, 100%VG,-n,datalv,datavg]
+  - [ cloud-init-per, once, create_fs, mkfs,-t, ext4,/dev/mapper/datavg-datalv]
+  - [ cloud-init-per, once, create_mount_point,mkdir,/data]
+  - [ cloud-init-per, once, mount_data, mount,/dev/mapper/datavg-datalv,/data]
+
+mounts:
+ - [ /dev/mapper/datavg-datalv, /data, "ext4", "defaults", "0", "0" ]
+
+
+ntp:
+  enabled: true
+  ntp_client: chrony
+  servers: 
+  - 120.25.115.20
+  - 203.107.6.88
+
+timezone: Asia/Chongqing
+```
+
+- `defaults/main.yml`
+```yaml
+vcenter_hostname:
+vcenter_username:
+vcenter_password: 
+vcenter_datacenter:
+vm_list:
+```
+
+- we can use an playbook to include this role as follows
+```yaml
+
+- name: create vm in dc1
+  hosts: 127.0.0.1
+  connection: local
+  become: yes
+  roles:
+  - ansible-role-vcenter-clone-vm
+  vars:
+  - vcenter_hostname: 10.36.51.11
+  - vcenter_username: "administrator@sapcae.com"
+  - vcenter_password: "Devops@2018"
+  - vcenter_datacenter: DC1
+  - vm_list:
+    - {'vm_name': 'dc1-oob-vm-mfa-prod01','template': 'Centos7-template2','vm_folder': '/DC1/vm/DevOps','vm_resource_pool': 'Resources','vm_cluster': "Cluster01", disks: [{'size': 80, 'datastore': '10.36.51.141-ds'},{'size': 100, 'datastore': '10.36.51.141-ds'}],'vm_memory_size':'8192','vm_cpu_count': '4','vm_network': 'VLAN520','vm_ip_addr': '10.36.47.218','vm_ip_mask': '255.255.255.192','vm_ip_gateway': '10.36.47.193'}
+    - {'vm_name': 'dc1-oob-vm-mfa-prod02','template': 'Centos7-template2','vm_folder': '/DC1/vm/DevOps','vm_resource_pool': 'Resources','vm_cluster': "Cluster01", disks: [{'size': 80, 'datastore': '10.36.51.142-ds'},{'size': 100, 'datastore': '10.36.51.142-ds'}],'vm_memory_size':'8192','vm_cpu_count': '4','vm_network': 'VLAN520','vm_ip_addr': '10.36.47.219','vm_ip_mask': '255.255.255.192','vm_ip_gateway': '10.36.47.193'}    
+```
