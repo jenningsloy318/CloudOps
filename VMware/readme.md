@@ -259,11 +259,7 @@ create a ansible role `ansible-role-vcenter-clone-vm`
     cluster: "{{ item.vm_cluster|default('Cluster01') }}"
     cdrom:
       type: client
-    disk:
-    - size_gb: "{{item.disks[0].size}}"
-      datastore: "{{item.disks[0].datastore}}"
-    - size_gb: "{{item.disks[1].size}}"
-      datastore: "{{item.disks[1].datastore}}"
+    disk: "{{item.disks}}"
     hardware:
       memory_mb: "{{item.vm_memory_size}}"
       num_cpus:  "{{item.vm_cpu_count}}"
@@ -367,6 +363,6 @@ vm_list:
   - vcenter_password: "Devops@2018"
   - vcenter_datacenter: DC1
   - vm_list:
-    - {'vm_name': 'dc1-oob-vm-mfa-prod01','template': 'Centos7-template2','vm_folder': '/DC1/vm/DevOps','vm_resource_pool': 'Resources','vm_cluster': "Cluster01", disks: [{'size': 80, 'datastore': '10.36.51.141-ds'},{'size': 100, 'datastore': '10.36.51.141-ds'}],'vm_memory_size':'8192','vm_cpu_count': '4','vm_network': 'VLAN520','vm_ip_addr': '10.36.47.218','vm_ip_mask': '255.255.255.192','vm_ip_gateway': '10.36.47.193'}
-    - {'vm_name': 'dc1-oob-vm-mfa-prod02','template': 'Centos7-template2','vm_folder': '/DC1/vm/DevOps','vm_resource_pool': 'Resources','vm_cluster': "Cluster01", disks: [{'size': 80, 'datastore': '10.36.51.142-ds'},{'size': 100, 'datastore': '10.36.51.142-ds'}],'vm_memory_size':'8192','vm_cpu_count': '4','vm_network': 'VLAN520','vm_ip_addr': '10.36.47.219','vm_ip_mask': '255.255.255.192','vm_ip_gateway': '10.36.47.193'}    
+    - {'vm_name': 'dc1-oob-vm-mfa-prod01','template': 'Centos7-template2','vm_folder': '/DC1/vm/DevOps','vm_resource_pool': 'Resources','vm_cluster': "Cluster01", disks: [{'size_gb': 80, 'datastore': '10.36.51.141-ds'},{'size_gb': 100, 'datastore': '10.36.51.141-ds'}],'vm_memory_size':'8192','vm_cpu_count': '4','vm_network': 'VLAN520','vm_ip_addr': '10.36.47.218','vm_ip_mask': '255.255.255.192','vm_ip_gateway': '10.36.47.193'}
+    - {'vm_name': 'dc1-oob-vm-mfa-prod02','template': 'Centos7-template2','vm_folder': '/DC1/vm/DevOps','vm_resource_pool': 'Resources','vm_cluster': "Cluster01", disks: [{'size_gb': 80, 'datastore': '10.36.51.142-ds'},{'size_gb': 100, 'datastore': '10.36.51.142-ds'}],'vm_memory_size':'8192','vm_cpu_count': '4','vm_network': 'VLAN520','vm_ip_addr': '10.36.47.219','vm_ip_mask': '255.255.255.192','vm_ip_gateway': '10.36.47.193'}    
 ```
