@@ -63,7 +63,9 @@ govc permissions.set -role  ReadOnly --principal=monitor@vc.local
   #remove udev hardware rules
   /bin/rm -f /etc/udev/rules.d/70*
   #remove uuid from ifcfg scripts
-  sed -i".bak" '/UUID/d' /etc/sysconfig/network-scripts/ifcfg-ens192
+  sed -i '/^\(HWADDR\|UUID\)=/d' /etc/sysconfig/network-scripts/ifcfg-e*
+  sed -i -e 's@^ONBOOT="no@ONBOOT="yes@' /etc/sysconfig/network-scripts/ifcfg-e*
+
   #remove SSH host keys
   /bin/rm -f /etc/ssh/*key*
   #remove root users shell history
@@ -71,6 +73,12 @@ govc permissions.set -role  ReadOnly --principal=monitor@vc.local
   unset HISTFILE
   #remove root users SSH history
   /bin/rm -rf ~root/.ssh/
+
+  # lock the root 
+  passwd -l root
+
+  # clear root history
+  history -cw
   ```
 
 1.3 configure  datasource for cloud-init, instance retrieve data from `VMwareGuestInfo` provided by [cloud-init-vmware-guestinfo](https://github.com/akutz/cloud-init-vmware-guestinfo), modify `/etc/cloud/cloud.cfg.d/99-DataSourceVMwareGuestInfo.cfg` with following content
