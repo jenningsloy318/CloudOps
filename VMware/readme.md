@@ -63,7 +63,7 @@ govc permissions.set -role  ReadOnly --principal=monitor@vc.local
   #remove udev hardware rules
   /bin/rm -f /etc/udev/rules.d/70*
   #remove uuid from ifcfg scripts
-  sed -i '/^\(HWADDR\|UUID\)=/d' /etc/sysconfig/network-scripts/ifcfg-e*
+  sed -i '/^\(HWADDR|UUID|IPADDR|NETMASK|GATEWAY\)=/d' /etc/sysconfig/network-scripts/ifcfg-e*
   sed -i -e 's@^ONBOOT="no@ONBOOT="yes@' /etc/sysconfig/network-scripts/ifcfg-e*
 
   #remove SSH host keys
