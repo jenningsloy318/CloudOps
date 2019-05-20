@@ -20,6 +20,37 @@ govc sso.user.create  -p Password#123 monitor
 govc role.ls 
 govc permissions.set -role  ReadOnly --principal=monitor@vc.local
 ```
+## 3 vm operations
+```sh
+## list vm/host ... 
+# govc ls vm   ---> for exsi 
+/ha-datacenter/vm/DC1-DMZ-WAF-PROD01
+/ha-datacenter/vm/DC1-EDG-TM-PROD01
+## find vm info 
+# govc vm.info -vm.ipath=/ha-datacenter/vm/DC1-DMZ-WAF-PROD01
+Name:           DC1-DMZ-WAF-PROD01
+  Path:         /ha-datacenter/vm/DC1-DMZ-WAF-PROD01
+  UUID:         4227bd31-871a-8054-eb09-09281ef47a7f
+  Guest name:   Other 3.x Linux (64-bit)
+  Memory:       16384MB
+  CPU:          4 vCPU(s)
+  Power state:  poweredOn
+  Boot time:    2019-05-16 06:49:18.96594 +0000 UTC
+  IP address:   10.36.47.253
+  Host:         ESXi1
+
+## remove file from datastore 
+#  govc datastore.rm -ds ESXI1-DS2 dc1-vm-ansible-prod01/dc1-vm-ansible-prod01.vmdk
+
+## copy  file to othere  location in same datastore
+# govc datastore.cp  -ds ESXI1-DS2 dc1-oob-vm-ansible-prod01/dc1-oob-vm-ansible-prod01.vmdk dc1-vm-ansible-prod01/dc1-vm-ansible-prod01.vmdk
+[20-05-19 10:58:40] Copying [ESXI1-DS2] dc1-oob-vm-ansible-prod01/dc1-oob-vm-ansible-prod01.vmdk to [ESXI1-DS2] dc1-vm-ansible-prod01/dc1-vm-ansible-prod01.vmdk...OK
+
+## create vm 
+# govc vm.create -m 8192 -c 4 -g rhel7_64Guest -net.adapter vmxnet3 -net=VLAN101  -ds=ESXI1-DS2  -disk=100G -disk.controller pvscsi dc1-vm-smtp-prod01
+
+
+```
 
 
 # Terraform integrated with Cloud-init to provision VM
