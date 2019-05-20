@@ -37,7 +37,6 @@ Group: System/Configuration/Boot and Init
 
 Requires: gawk
 Requires: gdisk
-Requires: sfdisk
 Requires: util-linux
 
 %description growpart
