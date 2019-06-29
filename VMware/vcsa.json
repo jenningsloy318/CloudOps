@@ -1,0 +1,46 @@
+{
+  "__version": "2.13.0",
+  "new_vcsa": {
+    "esxi": {
+      "hostname": "10.36.51.141",
+      "username": "root",
+      "password": "password",
+      "deployment_network": "VLAN100",
+      "datastore": "datastore1"
+    },
+    "appliance": {
+      "thin_disk_mode": true,
+      "deployment_option": "medium",
+      "name": "dc1-vm-vcsa-prod01"
+    },
+    "network": {
+      "ip_family": "ipv4",
+      "mode": "static",
+      "ip": "10.36.51.11",
+      "dns_servers": [
+        "114.114.114.114",
+        "223.5.5.5"
+      ],
+      "prefix": "26",
+      "gateway": "10.36.51.1",
+      "system_name": "10.36.51.11"
+    },
+    "os": {
+      "password": "password",
+      "ntp_servers": [
+        "120.25.115.20",
+        "203.107.6.88"
+      ],
+      "ssh_enable": true
+    },
+    "sso": {
+      "password": "password",
+      "domain_name": "lmy.com"
+    }
+  },
+  "ceip": {
+    "settings": {
+      "ceip_enabled": false
+    }
+  }
+}
