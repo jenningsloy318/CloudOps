@@ -4,6 +4,7 @@
 # cat meta-data
 instance-id: centos7
 network-interfaces: |
+  auto eth0
   iface eth0 inet static
   address 192.168.3.50
   netmask 255.255.255.128
