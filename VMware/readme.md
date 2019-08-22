@@ -53,7 +53,7 @@ Name:           DC1-DMZ-WAF-PROD01
 ```
 
 
-# Terraform integrated with Cloud-init to provision VM
+# Configure VM template with cloud-init
 
 ## 1. Configure Template VM 
 
@@ -122,7 +122,7 @@ Name:           DC1-DMZ-WAF-PROD01
 1.4 disabled network, since we can use vSphere to customize the IP add domain info, create file `/etc/cloud/cloud.cfg.d/06-network.cfg`, and add following content
   ```yaml
   network:
-  config: disabled
+    config: disabled
   ```
 1.5 adjust modules(the sequence, and remove useless modules) in sections such as `cloud_init_modules`,`cloud_config_modules`,`cloud_final_modules`, even change the modules in these sections.
 
@@ -130,14 +130,12 @@ Name:           DC1-DMZ-WAF-PROD01
 
 
 
+# Provision VM with configured template
+## 1. Create VM with terraform
 
-## 2. create VM with terraform
-
-2.1 create `userdata` to configure the instance
+1.1 create `cloudinit_userdata` to configure the instance
 ```yaml
 #cloud-config
-hostname:  dc1-vm-prometheus-prod01
-
 
 system_info:
   default_user:
@@ -161,24 +159,19 @@ growpart:
 
 resize_rootfs: true
 
-disk_setup:
-    /dev/sdb:
-         table_type: mbr
-         layout: True
-         overwrite: True
-
-runcmd:
-  - [ cloud-init-per, once, create_pv, pvcreate, /dev/sdb1 ]
-  - [ cloud-init-per, once, create_vg, vgcreate, datavg, /dev/sdb1 ]
-  - [ cloud-init-per, once, create_lv, lvcreate,-l, 100%VG,-n,datalv,datavg]
-  - [ cloud-init-per, once, create_fs, mkfs,-t, ext4,/dev/mapper/datavg-datalv]
-  - [ cloud-init-per, once, create_mount_point,mkdir,/data]
-  - [ cloud-init-per, once, mount_data, mount,/dev/mapper/datavg-datalv,/data]
-
-mounts:
- - [ /dev/mapper/datavg-datalv, /data, "ext4", "defaults", "0", "0" ]
 
 timezone: Asia/Chongqing
+
+manage_resolv_conf: true
+resolv_conf:
+    nameservers: 
+    - 10.36.52.172
+    - 10.36.52.173
+    domain: inb.lmy.com
+
+preserve_hostname: false
+manage_etc_hosts: false
+hostname:  dc1-vm-prometheus-prod01.inb.lmy.com
 
 ntp:
   enabled: true
@@ -186,14 +179,34 @@ ntp:
   servers:
     - 120.25.115.20
     - 203.107.6.88
+
+packages:
+ - ipa-client  
+ - nscd
+ - nss-pam-ldapd
+
 ```
+1.2 configure terraform conf
+```
+terraform {
+  required_version = "~> 0.11.0"
+}
 
+provider "vsphere" {
+  user           = "administrator@vc.local"
+  password       = "SapSuning@2018S1"
+  vsphere_server = "10.36.51.31"
 
-2.2 create template for userdata 
-```yaml
+  # If you have a self-signed cert
+  allow_unverified_ssl = true
+}
+```
+> only terraform under 0.12 support add extra_config with `guestinfo.userdata` and `guestinfo.userdata.encoding`
+
+1.3 create template for userdata 
+```tf
 data "template_file" "cloudinit_userdata" {
-  template ="/opt/terraform/cloudinit_userdata"
-  template ="${file("/opt/terraform/cloudinit_userdata")}"
+  template ="${file("./cloudinit_userdata")}"
 }
 
 data "template_cloudinit_config" "cloudinit_userdata" {
@@ -205,11 +218,45 @@ data "template_cloudinit_config" "cloudinit_userdata" {
   }
 }
 ```
+1.4 define data for DC/resource pool/network 
+```ft
 
-2.3 in the vsphere_virtual_machine to add extra_config to include this userdata
-```yaml
+data "vsphere_datacenter" "datacenter" {
+  name = "dc1"
+}
+
+data "vsphere_resource_pool" "pool" {
+  name          = "DevOps Applications"
+  datacenter_id = "${data.vsphere_datacenter.datacenter.id}"
+}
+
+data "vsphere_virtual_machine" "template" {
+  name          = "centos7_4"
+  datacenter_id = "${data.vsphere_datacenter.datacenter.id}"
+}
+
+
+data "vsphere_datastore" "datastore_os" {
+  name          = "OS"
+  datacenter_id = "${data.vsphere_datacenter.datacenter.id}"
+}
+data "vsphere_datastore" "datastore_data" {
+  name          = "Data"
+  datacenter_id = "${data.vsphere_datacenter.datacenter.id}"
+}
+
+
+data "vsphere_network" "network_VLAN101" {
+  name          = "VLAN101"
+  datacenter_id = "${data.vsphere_datacenter.datacenter.id}"
+}
+
+
+```
+1.5 in the vsphere_virtual_machine to add extra_config to include this userdata
+```tf
 resource "vsphere_virtual_machine" "instance" {
-  name             = "dc1-vm-prometheus-prod01"
+  name             = "dc1-vm-myprometheus-prod01"
   resource_pool_id = "${data.vsphere_resource_pool.pool.id}"
   datastore_id     = "${data.vsphere_datastore.datastore_os.id}"
 
@@ -240,9 +287,10 @@ resource "vsphere_virtual_machine" "instance" {
     client_device = true
   }
 
+
   extra_config {
-    "guestinfo.userdata"          = "${base64gzip(data.template_file.cloudinit_userdata.rendered)}"
-    "guestinfo.userdata.encoding" = "gzip+base64"
+     "guestinfo.userdata" = "${base64gzip(data.template_file.cloudinit_userdata.rendered)}"
+     "guestinfo.userdata.encoding" = "gzip+base64"
   }
 
   clone {
@@ -250,8 +298,8 @@ resource "vsphere_virtual_machine" "instance" {
 
     customize {
       linux_options {
-        host_name = "dc1-vm-prometheus-prod01"
-        domain = "xywlty.com"
+        host_name = "dc1-vm-myprometheus-prod01"
+        domain = "inb.lmy.com"
       }
       network_interface {
         ipv4_address = "10.36.52.150"
@@ -266,21 +314,23 @@ resource "vsphere_virtual_machine" "instance" {
 }
 ```
 
-2.3 use terraform apply to create instance, then when instance is started, cloud-init will begin to customize it as our need.
+1.6 use terraform apply to create instance, then when instance is started, cloud-init will begin to customize it as our need.
 
 
 
 
 
-## 2. create VM with ansible
+## 2. Create VM with ansible
 we can also use ansible to create vm, pass the userdata to `customvalues` with key and value. 
 
 create a ansible role `ansible-role-vcenter-clone-vm`
 
 - `tasks/main.yml`
 ```yaml
+- debug: 
+    msg: "Creating VM {{vm.vm_name}} on vCenter {{ vcenter_hostname }} "
 - name: encoding userdata
-  shell: gzip -c9 < "{{role_path}}/files/cloudinit_userdata" | base64 -w0
+  shell: echo  '{{ lookup("template","{{role_path}}/templates/cloudinit_userdata.j2") }}'|gzip -c9 | base64 -w0
   register: cloudinit_userdata
 
 - name:  Create virtual machine from templates
@@ -291,40 +341,32 @@ create a ansible role `ansible-role-vcenter-clone-vm`
     validate_certs: no
     datacenter: "{{ vcenter_datacenter|default('DC1') }}"
     state: present
-    folder: "{{item.vm_folder}}"
-    resource_pool: "{{item.vm_resource_pool}}"
-    template: "{{item.template}}"
-    name: "{{ item.vm_name }}"
-    cluster: "{{ item.vm_cluster|default('Cluster01') }}"
+    folder: "{{vm.vm_folder}}"
+    resource_pool: "{{vm.vm_resource_pool}}"
+    template: "{{vm.template}}"
+    name: "{{ vm.vm_name }}"
+    cluster: "{{ vm.vm_cluster|default('APP-Cluster01') }}"
     cdrom:
       type: client
-    disk: "{{item.disks}}"
+    disk: "{{vm.disks}}"
     hardware:
-      memory_mb: "{{item.vm_memory_size}}"
-      num_cpus:  "{{item.vm_cpu_count}}"
+      memory_mb: "{{vm.vm_memory_size}}"
+      num_cpus:  "{{vm.vm_cpu_count}}"
       hotadd_cpu: True
       hotremove_cpu: True
       hotadd_memory: true
-    networks:
-      - name: "{{item.vm_network}}"
-        ip: "{{item.vm_ip_addr}}"
-        netmask: "{{item.vm_ip_mask}}"
-        gateway: "{{item.vm_ip_gateway}}"
+    networks: "{{vm.networks}}"
     wait_for_ip_address: True
-    customization:
-      hostname: "{{item.vm_name}}"
-      dns_servers:
-        - 114.114.114.11
-        - 223.5.5.5
-        - 119.29.29.29
-      domain: xywlty.com
     customvalues:
     - key: guestinfo.userdata
       value: "{{ cloudinit_userdata.stdout }}"
     - key: guestinfo.userdata.encoding
       value: "gzip+base64"
   delegate_to: localhost
-  with_items: "{{vm_list}}"
+  register: cloned_vm
+
+- name: show instance metadata 
+  debug: var=cloned_vm.instance
 ```
 - `files/userdata`
 ```yaml
@@ -402,6 +444,5 @@ vm_list:
   - vcenter_password: "Devops@2018"
   - vcenter_datacenter: DC1
   - vm_list:
-    - {'vm_name': 'dc1-oob-vm-mfa-prod01','template': 'Centos7-template2','vm_folder': '/DC1/vm/DevOps','vm_resource_pool': 'Resources','vm_cluster': "Cluster01", disks: [{'size_gb': 80, 'datastore': '10.36.51.141-ds'},{'size_gb': 100, 'datastore': '10.36.51.141-ds'}],'vm_memory_size':'8192','vm_cpu_count': '4','vm_network': 'VLAN520','vm_ip_addr': '10.36.47.218','vm_ip_mask': '255.255.255.192','vm_ip_gateway': '10.36.47.193'}
-    - {'vm_name': 'dc1-oob-vm-mfa-prod02','template': 'Centos7-template2','vm_folder': '/DC1/vm/DevOps','vm_resource_pool': 'Resources','vm_cluster': "Cluster01", disks: [{'size_gb': 80, 'datastore': '10.36.51.142-ds'},{'size_gb': 100, 'datastore': '10.36.51.142-ds'}],'vm_memory_size':'8192','vm_cpu_count': '4','vm_network': 'VLAN520','vm_ip_addr': '10.36.47.219','vm_ip_mask': '255.255.255.192','vm_ip_gateway': '10.36.47.193'}    
+    - {'vm_name': 'dc1-vm-hana-exporter-prod03','domain': 'inb.cnsgas.com','template': 'RHEL74-TEMPLATE','vm_folder': '/DC1/vm/DevOps','vm_resource_pool': 'DevOps','vm_cluster': "APP-Cluster01", disks: [{'size_gb': 100, 'datastore': 'INB_DATA_DEVOPS'}],'vm_memory_size': '4096','vm_cpu_count': '2',networks: [{'name': 'VLAN101','ip': '10.36.52.162','netmask': '255.255.255.192','gateway': '10.36.52.129'}]
 ```
