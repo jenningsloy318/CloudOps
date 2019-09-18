@@ -57,7 +57,7 @@ Name:           DC1-DMZ-WAF-PROD01
 
 ## 1. Configure Template VM 
 
->-  since default cloud-init in the centos repos lacked some feature, we can compile it from source
+>-  since default cloud-init in the centos repos lacked some feature, we can compile it from source; the template require cloud-init >=18.4
 > - git clone  https://github.com/cloud-init/cloud-init.git
 > - git checkout 18.5 # change to release 18.5
 > - make ci-deps-centos  # install dependency, make sure epel repo is installed
@@ -112,18 +112,19 @@ Name:           DC1-DMZ-WAF-PROD01
   history -cw
   ```
 
-1.3 configure  datasource for cloud-init, instance retrieve data from `VMwareGuestInfo` provided by [cloud-init-vmware-guestinfo](https://github.com/akutz/cloud-init-vmware-guestinfo), modify `/etc/cloud/cloud.cfg.d/99-DataSourceVMwareGuestInfo.cfg` with following content
+1.3 configure  datasource for cloud-init, instance retrieve data from `VMwareGuestInfo` provided by [cloud-init-vmware-guestinfo](https://github.com/vmware/cloud-init-vmware-guestinfo), modify `/etc/cloud/cloud.cfg.d/99-DataSourceVMwareGuestInfo.cfg` with following content
   ```yaml
   datasource_list: ['VMwareGuestInfo']
-  datasource:
-    VMwareGuestInfo:
-      dsmode: local
   ```
-1.4 disabled network, since we can use vSphere to customize the IP add domain info, create file `/etc/cloud/cloud.cfg.d/06-network.cfg`, and add following content
+1.4 (optional) disabled network, since we can use vSphere to customize the IP add domain info, create file `/etc/cloud/cloud.cfg.d/06-network.cfg`, and add following content
   ```yaml
   network:
     config: disabled
   ```
+  > - when used with ansible, we need to configured template as this,as it is not convienent to add network configure to cloudinit metatdata;
+  > - when used with terraform, we can easily add cloudinit metadata, so it is not required.
+
+
 1.5 adjust modules(the sequence, and remove useless modules) in sections such as `cloud_init_modules`,`cloud_config_modules`,`cloud_final_modules`, even change the modules in these sections.
 
 1.6 install other software that as needed, for example monitoring agent.
@@ -133,7 +134,30 @@ Name:           DC1-DMZ-WAF-PROD01
 # Provision VM with configured template
 ## 1. Create VM with terraform
 
-1.1 create `cloudinit_userdata` to configure the instance
+1.1  prepare cloudinit conf, refer to [cloud-init-vmware-guestinfo](https://github.com/vmware/cloud-init-vmware-guestinfo).
+- create `cloudinit_metatata-netconf.yml`, later it will be passed to metadata
+```yaml
+version: 1
+config:
+  - type: physical
+    name: ens192
+    subnets:
+      - type: static
+        address: 10.36.52.141/25
+        gateway: 10.36.52.129
+        dns_nameservers:
+          - 8.8.8.8
+          - 8.8.4.4
+```
+
+- create `cloudinit_metadata.json` to configure the instance, the `network` is the output of `cloudinit_metatata-netconf.yml` with `base64+gzip` encoded
+{
+  "network": "${network_config}",
+  "network.encoding": "gzip+base64",
+  "instance-id": "vcloud-vm"
+}
+
+- create `cloudinit_userdata.yaml` to configure the instance
 ```yaml
 #cloud-config
 
@@ -146,8 +170,7 @@ system_info:
    groups: [adm, root,wheel]
    sudo:  ALL=(ALL) ALL
    ssh_authorized_keys:
-   - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDBJkrhbsq0e02D5SHl+veUsoQW5EVY5ROr3Wm+Uc4aFb4vCMUfT4koKau5j5wHCBe5gqDkx55uzbD/xvsHUSn4NY0hzspBMy4cHQw5SvpLb5brArKk2TP1C3HMJRv+K8N9we9Hk6dbf9VgSQmPcp6uHUKgfd42h4sAlQJVO
-VoS73wTcP4Gg8x4ePnYW2Nd8moUpS+eCMyj/pj0hnMyK9B14E17Hb+89f0NU7LrweqZlieoYuuZLgCMzq1mThW2ES2kTx1CGnyz0iicPbENdezNF7J4Po0bEWjjSS1cW1Lj3pREbEpIM/vsJJLdF8ZME7Zp1EWXLBhrJcqX1zTf0Jx vscloud
+   - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDBJkrhbsq0e02D5SHl+veUsoQW5EVY5ROr3Wm+Uc4aFb4vCMUfT4koKau5j5wHCBe5gqDkx55uzbD/xvsHUSn4NY0hzspBMy4cHQw5SvpLb5brArKk2TP1C3HMJRv+K8N9we9Hk6dbf9VgSQmPcp6uHUKgfd42h4sAlQJVOVoS73wTcP4Gg8x4ePnYW2Nd8moUpS+eCMyj/pj0hnMyK9B14E17Hb+89f0NU7LrweqZlieoYuuZLgCMzq1mThW2ES2kTx1CGnyz0iicPbENdezNF7J4Po0bEWjjSS1cW1Lj3pREbEpIM/vsJJLdF8ZME7Zp1EWXLBhrJcqX1zTf0Jx vscloud
 
 chpasswd:
     list:
@@ -203,7 +226,33 @@ provider "vsphere" {
 ```
 > only terraform under 0.12 support add extra_config with `guestinfo.userdata` and `guestinfo.userdata.encoding`
 
-1.3 create template for userdata 
+1.3 create template for cloudinit
+- network config, this will be the  value of `metadata.network` after encoded with `gzip+base64`
+```tf
+data "template_file" "cloudinit_metadata_netconfig" {
+  template ="${file("./cloudinit_metadata_netconfig.yaml")}"
+}
+```
+
+- metadata, value of `network_config` is `gzip+base64` encoded `cloudinit_metadata_netconfig.yaml`
+```tf
+data "template_file" "cloudinit_metadata" {
+  template ="${file("./cloudinit_metadata")}"
+  vars = {
+    network_config = "${base64gzip(data.template_cloudinit_config.cloudinit_metadata_netconfig.rendered)}"
+  }
+}
+
+data "template_cloudinit_config" "cloudinit_metadata" {
+  gzip          = true
+  base64_encode = true
+  part {
+    content_type = "text/cloud-config"
+    content = "${data.template_file.cloudinit_metadata.rendered}"
+  }
+}
+```
+- userdata 
 ```tf
 data "template_file" "cloudinit_userdata" {
   template ="${file("./cloudinit_userdata")}"
@@ -368,7 +417,7 @@ create a ansible role `ansible-role-vcenter-clone-vm`
 - name: show instance metadata 
   debug: var=cloned_vm.instance
 ```
-- `files/userdata`
+- `files/cloudinit-userdata`
 ```yaml
 #cloud-config
 system_info:
