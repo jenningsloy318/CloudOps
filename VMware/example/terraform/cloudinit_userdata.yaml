@@ -1,0 +1,38 @@
+#cloud-config
+
+system_info:
+  default_user:
+   name: vscloud
+   home: /home/vscloud
+   shell: /bin/bash
+   gecos: Centos vSphere
+   groups: [adm, root,wheel]
+   sudo:  ALL=(ALL) ALL
+   ssh_authorized_keys:
+   - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDBJkrhbsq0e02D5SHl+veUsoQW5EVY5ROr3Wm+Uc4aFb4vCMUfT4koKau5j5wHCBe5gqDkx55uzbD/xvsHUSn4NY0hzspBMy4cHQw5SvpLb5brArKk2TP1C3HMJRv+K8N9we9Hk6dbf9VgSQmPcp6uHUKgfd42h4sAlQJVOVoS73wTcP4Gg8x4ePnYW2Nd8moUpS+eCMyj/j0hnMyK9B14E17Hb89f0NU7LrweqZlieoYuuZLgCMzq1mThW2ES2kTx1CGnyz0iicPbENdezNF7J4Po0bEWjjSS1cW1Lj3pREbEpIM/vsJJLdF8ZME7Zp1EWXLBhrJcqX1zTf0Jx vscloud
+
+chpasswd:
+    expire: false
+    list:    
+    - vscloud:$6$.7Lt.WZiFe7Wphgs$bxXXMacpMFzUzpi23p.ITL0h7DLH9orJj5nid3Id2wR3fld9.voFGUlJQTXotu8qr53q68e3GAPZ7QViBbAXe1
+
+growpart:
+  mode: growpart
+  devices: [ '/dev/sda2' ]
+
+resize_rootfs: true
+
+
+timezone: Asia/Chongqing
+
+manage_resolv_conf: true
+resolv_conf:
+    nameservers: 
+    - 10.36.52.172
+    - 10.36.52.173
+    domain: inb.lmy.com
+
+preserve_hostname: false
+manage_etc_hosts: false
+hostname:  dc1-vm-myprometheus-prod01.inb.lmy.com
+
