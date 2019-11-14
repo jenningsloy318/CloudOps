@@ -495,3 +495,20 @@ vm_list:
   - vm_list:
     - {'vm_name': 'dc1-vm-hana-exporter-prod03','domain': 'inb.cnsgas.com','template': 'RHEL74-TEMPLATE','vm_folder': '/DC1/vm/DevOps','vm_resource_pool': 'DevOps','vm_cluster': "APP-Cluster01", disks: [{'size_gb': 100, 'datastore': 'INB_DATA_DEVOPS'}],'vm_memory_size': '4096','vm_cpu_count': '2',networks: [{'name': 'VLAN101','ip': '10.36.52.162','netmask': '255.255.255.192','gateway': '10.36.52.129'}]
 ```
+
+
+# export and import VM via ovftool
+- import to vCenter 
+  ```
+  ovftool  --name=dc1-vm-smtp-prod01 --datastore=INB_DATA_DEVOPS --network=VLAN101 --vmFolder=DevOps  --powerOn --skipManifestCheck --noSSLVerify --acce
+  ptAllEulas --sourceType=OVA  dc1-vm-smtp-prod01.ova vi://user:pass@10.36.51.11:443/DC1/host/APP-Cluster01/Resources/DevOps
+  ```
+- import to ESXi
+  ```
+  ovftool --name=dc1-vm-smtp-prod01 --datastore=INB_DATA_DEVOPS --network=VLAN101  --powerOn --skipManifestCheck --noSSLVerify --acceptAllEulas --sourceType=OVA  dc1-vm-smtp-prod01.ova vi://user:pass@10.36.51.141:443/
+  ```
+- export from vCenter 
+  ```
+  ovftool  --acceptAllEulas --noSSLVerify --acceptAllEulas vi://user:pass@10.36.51.11:443/DC1/vm/Templates/RHEL74-TEMPLATE RHEL74-TEMPLATE.ova
+  ```
+
