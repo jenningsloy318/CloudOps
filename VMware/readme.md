@@ -150,7 +150,32 @@ Name:           DC1-DMZ-WAF-PROD01
           - {'vm_name': 'dc1-vm-hana-exporter-prod03','domain': 'inb.cnsgas.com','template': 'RHEL74-TEMPLATE','vm_folder': '/DC1/vm/DevOps','vm_resource_pool': 'DevOps','vm_cluster': "APP-Cluster01", disks: [{'size_gb': 100, 'datastore': 'INB_DATA_DEVOPS'}],'vm_memory_size': '4096','vm_cpu_count': '2',networks: [{'name': 'VLAN101','ip': '10.36.52.162','netmask': '255.255.255.192','gateway': '10.36.52.129'}]
         ```
 
+3. for network config, we can also pass the config through metadat with a network config 
+  - cloudinit_metadata_netconfig.yaml, and encode it as gzip+base64 format
+    ```yaml
+    version: 1	
+    config:	
+    - type: physical	
+      name: ens192	
+      subnets:	
+      - type: static	
+        address: 10.36.52.150/25	
+        gateway:  10.36.52.129	
+        dns_nameservers:	
+        - 120.25.115.20	
+        - 203.107.6.88	
+    ```
+  - metadata.json, also encode it as gzip+base64
+    ```json
+    {	
+      "network": "${networ-config}",	
+      "network.encoding": "gzip+base64",	
+      "instance-id": "vscloud-vm",	
+      "local-hostname": "dc1-vm-myprometheus-prod01.lmy.com"	
+    }
+    ```
 
+  -  pass the metadata.json encoded string to `guestinfo.metadata`  and  `guestinfo.metadata.encoding` to `terraform` `extra_config` or `ansible` `customvalues`
 # export and import VM via ovftool
 - import to vCenter 
   ```
