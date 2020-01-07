@@ -1,7 +1,0 @@
-{
-  "network": "${networ-config}",
-  "network.encoding": "gzip+base64",
-  "instance-id": "vscloud-vm",
-  "local-hostname": "dc1-vm-myprometheus-prod01"
-}
- 

@@ -53,7 +53,7 @@ Name:           DC1-DMZ-WAF-PROD01
 ```
 
 
-# Configure VM template with cloud-init
+# Configure VM template with cloud-init enabled
 
 ## 1. Configure Template VM 
 
@@ -117,14 +117,11 @@ Name:           DC1-DMZ-WAF-PROD01
   ```yaml
   datasource_list: ['VMwareGuestInfo']
   ```
-1.4 (optional) disabled network, since we can use vSphere to customize the IP add domain info, create file `/etc/cloud/cloud.cfg.d/06-network.cfg`, and add following content
+1.4 (optional) disabled network, since we can use vSphere api to customize the network info, create file `/etc/cloud/cloud.cfg.d/06-network.cfg`, and add following content
   ```yaml
   network:
     config: disabled
   ```
-  > - when used with ansible, we need to configured template as this,as it is not convienent to add network configure to cloudinit metatdata;
-  > - when used with terraform, we can easily add cloudinit metadata, so it is not required.
-
 
 1.5 adjust modules(the sequence, and remove useless modules) in sections such as `cloud_init_modules`,`cloud_config_modules`,`cloud_final_modules`, even change the modules in these sections.
 
@@ -133,369 +130,25 @@ Name:           DC1-DMZ-WAF-PROD01
 
 
 # Provision VM with configured template
-## 1. Create VM with terraform
-
-1.1  prepare cloudinit conf, refer to [cloud-init-vmware-guestinfo](https://github.com/vmware/cloud-init-vmware-guestinfo).
-- create `cloudinit_metatata-netconf.yml`, later it will be passed to metadata
-```yaml
-version: 1
-config:
-  - type: physical
-    name: ens192
-    subnets:
-      - type: static
-        address: 10.36.52.141/25
-        gateway: 10.36.52.129
-        dns_nameservers:
-          - 8.8.8.8
-          - 8.8.4.4
-```
-
-- create `cloudinit_metadata.json` to configure the instance, the `network` is the output of `cloudinit_metatata-netconf.yml` with `base64+gzip` encoded
-{
-  "network": "${network_config}",
-  "network.encoding": "gzip+base64",
-  "instance-id": "vcloud-vm"
-}
-
-- create `cloudinit_userdata.yaml` to configure the instance
-```yaml
-#cloud-config
-
-system_info:
-  default_user:
-   name: vscloud
-   home: /home/vscloud
-   shell: /bin/bash
-   gecos: Centos vSphere
-   groups: [adm, root,wheel]
-   sudo:  ALL=(ALL) ALL
-   ssh_authorized_keys:
-   - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDBJkrhbsq0e02D5SHl+veUsoQW5EVY5ROr3Wm+Uc4aFb4vCMUfT4koKau5j5wHCBe5gqDkx55uzbD/xvsHUSn4NY0hzspBMy4cHQw5SvpLb5brArKk2TP1C3HMJRv+K8N9we9Hk6dbf9VgSQmPcp6uHUKgfd42h4sAlQJVOVoS73wTcP4Gg8x4ePnYW2Nd8moUpS+eCMyj/pj0hnMyK9B14E17Hb+89f0NU7LrweqZlieoYuuZLgCMzq1mThW2ES2kTx1CGnyz0iicPbENdezNF7J4Po0bEWjjSS1cW1Lj3pREbEpIM/vsJJLdF8ZME7Zp1EWXLBhrJcqX1zTf0Jx vscloud
-
-chpasswd:
-    list:
-        - vscloud:$6$.7Lt.WZiFe7Wphgs$bxXXMacpMFzUzpi23p.ITL0h7DLH9orJj5nid3Id2wR3fld9.voFGUlJQTXotu8qr53q68e3GAPZ7QViBbAXe1
-
-growpart:
-  mode: growpart
-  devices: [ '/dev/sda2' ]
-
-resize_rootfs: true
-
-
-timezone: Asia/Chongqing
-
-manage_resolv_conf: true
-resolv_conf:
-    nameservers: 
-    - 10.36.52.172
-    - 10.36.52.173
-    domain: inb.lmy.com
-
-preserve_hostname: false
-manage_etc_hosts: false
-hostname:  dc1-vm-prometheus-prod01.inb.lmy.com
-
-ntp:
-  enabled: true
-  ntp_client: chrony
-  servers:
-    - 120.25.115.20
-    - 203.107.6.88
-
-packages:
- - ipa-client  
- - nscd
- - nss-pam-ldapd
-
-```
-1.2 configure terraform conf
-```
-terraform {
-  required_version = "~> 0.11.0"
-}
-
-provider "vsphere" {
-  user           = "administrator@vc.local"
-  password       = "SapSuning@2018S1"
-  vsphere_server = "10.36.51.31"
-
-  # If you have a self-signed cert
-  allow_unverified_ssl = true
-}
-```
-> only terraform under 0.12 support add extra_config with `guestinfo.userdata` and `guestinfo.userdata.encoding`
-
-1.3 create template for cloudinit
-- network config, this will be the  value of `metadata.network` after encoded with `gzip+base64`
-```tf
-data "template_file" "cloudinit_metadata_netconfig" {
-  template ="${file("./cloudinit_metadata_netconfig.yaml")}"
-}
-```
-
-- metadata, value of `network_config` is `gzip+base64` encoded `cloudinit_metadata_netconfig.yaml`
-```tf
-data "template_file" "cloudinit_metadata" {
-  template ="${file("./cloudinit_metadata")}"
-  vars = {
-    network_config = "${base64gzip(data.template_cloudinit_config.cloudinit_metadata_netconfig.rendered)}"
-  }
-}
-
-data "template_cloudinit_config" "cloudinit_metadata" {
-  gzip          = true
-  base64_encode = true
-  part {
-    content_type = "text/cloud-config"
-    content = "${data.template_file.cloudinit_metadata.rendered}"
-  }
-}
-```
-- userdata 
-```tf
-data "template_file" "cloudinit_userdata" {
-  template ="${file("./cloudinit_userdata")}"
-}
-
-data "template_cloudinit_config" "cloudinit_userdata" {
-  gzip          = true
-  base64_encode = true
-  part {
-    content_type = "text/cloud-config"
-    content = "${data.template_file.cloudinit_userdata.rendered}"
-  }
-}
-```
-1.4 define data for DC/resource pool/network 
-```ft
-
-data "vsphere_datacenter" "datacenter" {
-  name = "dc1"
-}
-
-data "vsphere_resource_pool" "pool" {
-  name          = "DevOps Applications"
-  datacenter_id = "${data.vsphere_datacenter.datacenter.id}"
-}
-
-data "vsphere_virtual_machine" "template" {
-  name          = "centos7_4"
-  datacenter_id = "${data.vsphere_datacenter.datacenter.id}"
-}
-
-
-data "vsphere_datastore" "datastore_os" {
-  name          = "OS"
-  datacenter_id = "${data.vsphere_datacenter.datacenter.id}"
-}
-data "vsphere_datastore" "datastore_data" {
-  name          = "Data"
-  datacenter_id = "${data.vsphere_datacenter.datacenter.id}"
-}
-
-
-data "vsphere_network" "network_VLAN101" {
-  name          = "VLAN101"
-  datacenter_id = "${data.vsphere_datacenter.datacenter.id}"
-}
-
-
-```
-1.5 in the vsphere_virtual_machine to add extra_config to include this userdata
-```tf
-resource "vsphere_virtual_machine" "instance" {
-  name             = "dc1-vm-myprometheus-prod01"
-  resource_pool_id = "${data.vsphere_resource_pool.pool.id}"
-  datastore_id     = "${data.vsphere_datastore.datastore_os.id}"
-
-  num_cpus = "4"
-  memory   = "8192"
-  guest_id = "${data.vsphere_virtual_machine.template.guest_id}"
-
-  scsi_type = "${data.vsphere_virtual_machine.template.scsi_type}"
-
-  network_interface {
-    network_id   = "${data.vsphere_network.network_VLAN101.id}"
-  }
-
-  disk {
-    label            = "os"
-    size             = "70"
-    unit_number      =  "0"
-    datastore_id     = "${data.vsphere_datastore.datastore_os.id}"
-    }
-  disk {
-    label            = "data"
-    size             = "100"
-    unit_number      =  "1"
-    datastore_id     = "${data.vsphere_datastore.datastore_data.id}"
-    }
-
-  cdrom {
-    client_device = true
-  }
-
-
-  extra_config {
-     "guestinfo.userdata" = "${base64gzip(data.template_file.cloudinit_userdata.rendered)}"
-     "guestinfo.userdata.encoding" = "gzip+base64"
-  }
-
-  clone {
-    template_uuid = "${data.vsphere_virtual_machine.template.id}"
-
-    customize {
-      linux_options {
-        host_name = "dc1-vm-myprometheus-prod01"
-        domain = "inb.lmy.com"
-      }
-      network_interface {
-        ipv4_address = "10.36.52.150"
-        ipv4_netmask = "25"
-      }
-      ipv4_gateway = "10.36.52.129"
-      dns_server_list =["114.114.114.114","223.5.5.5","119.29.29.29"]
-
-
-    }
-  }
-}
-```
-
-1.6 use terraform apply to create instance, then when instance is started, cloud-init will begin to customize it as our need.
-
-
-
-
-
-## 2. Create VM with ansible
-we can also use ansible to create vm, pass the userdata to `customvalues` with key and value. 
-
-create a ansible role `ansible-role-vcenter-clone-vm`
-
-- `tasks/main.yml`
-```yaml
-- debug: 
-    msg: "Creating VM {{vm.vm_name}} on vCenter {{ vcenter_hostname }} "
-- name: encoding userdata
-  shell: echo  '{{ lookup("template","{{role_path}}/templates/cloudinit_userdata.j2") }}'|gzip -c9 | base64 -w0
-  register: cloudinit_userdata
-
-- name:  Create virtual machine from templates
-  vmware_guest:
-    hostname: "{{ vcenter_hostname }}"
-    username: "{{ vcenter_username }}"
-    password: "{{ vcenter_password }}"
-    validate_certs: no
-    datacenter: "{{ vcenter_datacenter|default('DC1') }}"
-    state: present
-    folder: "{{vm.vm_folder}}"
-    resource_pool: "{{vm.vm_resource_pool}}"
-    template: "{{vm.template}}"
-    name: "{{ vm.vm_name }}"
-    cluster: "{{ vm.vm_cluster|default('APP-Cluster01') }}"
-    cdrom:
-      type: client
-    disk: "{{vm.disks}}"
-    hardware:
-      memory_mb: "{{vm.vm_memory_size}}"
-      num_cpus:  "{{vm.vm_cpu_count}}"
-      hotadd_cpu: True
-      hotremove_cpu: True
-      hotadd_memory: true
-    networks: "{{vm.networks}}"
-    wait_for_ip_address: True
-    customvalues:
-    - key: guestinfo.userdata
-      value: "{{ cloudinit_userdata.stdout }}"
-    - key: guestinfo.userdata.encoding
-      value: "gzip+base64"
-  delegate_to: localhost
-  register: cloned_vm
-
-- name: show instance metadata 
-  debug: var=cloned_vm.instance
-```
-- `files/cloudinit-userdata`
-```yaml
-#cloud-config
-system_info:
-  default_user:
-   name: vscloud
-   home: /home/vscloud
-   shell: /bin/bash
-   gecos: Centos vSphere
-   groups: [adm, root,wheel]
-   sudo:  ALL=(ALL) ALL
-   ssh_authorized_keys:
-   - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDBJkrhbsq0e02D5SHl+veUsoQW5EVY5ROr3Wm+Uc4aFb4vCMUfT4koKau5j5wHCBe5gqDkx55uzbD/xvsHUSn4NY0hzspBMy4cHQw5SvpLb5brArKk2TP1C3HMJRv+K8N9we9Hk6dbf9VgSQmPcp6uHUKgfd42h4sAlQJVOVoS73wTcP4Gg8x4ePnYW2Nd8moUpS+eCMyj/pj0hnMyK9B14E17Hb+89f0NU7LrweqZlieoYuuZLgCMzq1mThW2ES2kTx1CGnyz0iicPbENdezNF7J4Po0bEWjjSS1cW1Lj3pREbEpIM/vsJJLdF8ZME7Zp1EWXLBhrJcqX1zTf0Jx vscloud
-
-chpasswd:
-    list:
-        - vscloud:$6$.7Lt.WZiFe7Wphgs$bxXXMacpMFzUzpi23p.ITL0h7DLH9orJj5nid3Id2wR3fld9.voFGUlJQTXotu8qr53q68e3GAPZ7QViBbAXe1
- 
-growpart:
-  mode: growpart
-  devices: [ '/dev/sda2' ]
-
-resize_rootfs: true
-
-disk_setup:
-    /dev/sdb:
-         table_type: mbr
-         layout: True
-         overwrite: True
-
-runcmd:
-  - [ cloud-init-per, once, create_pv, pvcreate, /dev/sdb1 ]
-  - [ cloud-init-per, once, create_vg, vgcreate, datavg, /dev/sdb1 ]
-  - [ cloud-init-per, once, create_lv, lvcreate,-l, 100%VG,-n,datalv,datavg]
-  - [ cloud-init-per, once, create_fs, mkfs,-t, ext4,/dev/mapper/datavg-datalv]
-  - [ cloud-init-per, once, create_mount_point,mkdir,/data]
-  - [ cloud-init-per, once, mount_data, mount,/dev/mapper/datavg-datalv,/data]
-
-mounts:
- - [ /dev/mapper/datavg-datalv, /data, "ext4", "defaults", "0", "0" ]
-
-
-ntp:
-  enabled: true
-  ntp_client: chrony
-  servers: 
-  - 120.25.115.20
-  - 203.107.6.88
-
-timezone: Asia/Chongqing
-```
-
-- `defaults/main.yml`
-```yaml
-vcenter_hostname:
-vcenter_username:
-vcenter_password: 
-vcenter_datacenter:
-vm_list:
-```
-
-- we can use an playbook to include this role as follows
-```yaml
-
-- name: create vm in dc1
-  hosts: 127.0.0.1
-  connection: local
-  become: yes
-  roles:
-  - ansible-role-vcenter-clone-vm
-  vars:
-  - vcenter_hostname: 10.36.51.11
-  - vcenter_username: "administrator@lmy.com"
-  - vcenter_password: "Devops@2018"
-  - vcenter_datacenter: DC1
-  - vm_list:
-    - {'vm_name': 'dc1-vm-hana-exporter-prod03','domain': 'inb.cnsgas.com','template': 'RHEL74-TEMPLATE','vm_folder': '/DC1/vm/DevOps','vm_resource_pool': 'DevOps','vm_cluster': "APP-Cluster01", disks: [{'size_gb': 100, 'datastore': 'INB_DATA_DEVOPS'}],'vm_memory_size': '4096','vm_cpu_count': '2',networks: [{'name': 'VLAN101','ip': '10.36.52.162','netmask': '255.255.255.192','gateway': '10.36.52.129'}]
-```
+1.  [Terraform](examples/terraform) demonstrates the terraform role to provision vm, VM network is configured by terraform which invokes vsphere api 
+    - modify `variables.tf` to fit the require and then execute `terraform apply` to provision new vm
+2. [Ansible](examples/ansible) demonstrates ansible role to  provision VM
+    - create a ansible playbook to include the ansible to to provision new vm
+      ```yaml
+      - name: create vm in dc1
+        hosts: 127.0.0.1
+        connection: local
+        become: yes
+        roles:
+        - ansible-role-vcenter-clone-vm
+        vars:
+        - vcenter_hostname: 10.36.51.11
+        - vcenter_username: "administrator@lmy.com"
+        - vcenter_password: "Devops@2018"
+        - vcenter_datacenter: DC1
+        - vm_list:
+          - {'vm_name': 'dc1-vm-hana-exporter-prod03','domain': 'inb.cnsgas.com','template': 'RHEL74-TEMPLATE','vm_folder': '/DC1/vm/DevOps','vm_resource_pool': 'DevOps','vm_cluster': "APP-Cluster01", disks: [{'size_gb': 100, 'datastore': 'INB_DATA_DEVOPS'}],'vm_memory_size': '4096','vm_cpu_count': '2',networks: [{'name': 'VLAN101','ip': '10.36.52.162','netmask': '255.255.255.192','gateway': '10.36.52.129'}]
+        ```
 
 
 # export and import VM via ovftool
