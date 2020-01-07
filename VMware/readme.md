@@ -61,6 +61,7 @@ Name:           DC1-DMZ-WAF-PROD01
 > - git clone  https://github.com/cloud-init/cloud-init.git
 > - git checkout 18.5 # change to release 18.5
 > - make ci-deps-centos  # install dependency, make sure epel repo is installed
+> - yum install -y python34-jinja2.noarch python36-jinja2.noarch python36-requests python36-six python36-yaml  python-oauthlib python-jsonpatch  python-jsonschema  
 > - make rpm # build rpm
 
 1.1 install required packages and upgrade system to the latest
