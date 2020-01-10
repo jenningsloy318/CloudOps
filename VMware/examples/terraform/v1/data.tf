@@ -1,10 +1,10 @@
-data "template_cloudinit_config" "config" {
+data "template_cloudinit_config" "userdata" {
   gzip          = true
   base64_encode = true
 
   # Main cloud-config configuration file.
   part {
-    filename     = "init.cfg"
+    filename     = "userdata.yaml"
     content_type = "text/cloud-config"
     content     =    templatefile("${path.module}/cloudinit_userdata.tpl", 
       {

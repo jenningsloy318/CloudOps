@@ -41,7 +41,7 @@ resource "vsphere_virtual_machine" "instance" {
 
 
   extra_config = { /* sine the argument guestinfo.userdata and guestinfo.userdata.encoding contains dot(.), so we should quote them, as arguments can't be quoted, so should add = at the outmost extra_config argument */
-     "guestinfo.userdata" = data.template_cloudinit_config.config.rendered  
+     "guestinfo.userdata" = data.template_cloudinit_config.userdata.rendered  
      "guestinfo.userdata.encoding" = "gzip+base64"
   }
 
