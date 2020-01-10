@@ -17,36 +17,37 @@ variable "vsphere_password" {
 variable "vm_datacenter" {
    description ="datacenter this vm will be created in"
    type = string
-   default =  "dc1"
+   default =  "DC1"
 
 }
+
 variable "vm_resource_pool" {
    description ="resource pool this vm will be created in"
    type = string
-   default =  "DevOps Applications"
+   default =  "DevOps"
 }
 variable "vm_folder" {
-    description = "the vm folder to put the VM"
+    description = "the vm folder to put the VM,must under directory vm for VMs, if set vm/abc, we can see the vm under the vm folder abc in vcenter inventory"
     type = string  
-    default  = "DevOps"
+    default  = "vm/DevOps"
 
 }
 variable "vm_template" {
    description ="vm template this vm will be created from"
    type = string
-   default =  "centos7_4"
+   default =  "RHEL74-TEMPLATE"
 }
 
 variable "vm_datastore_os" {
    description ="datastore for new vm os disk"
    type = string
-   default =  "OS"
+   default =  "INB_DATA_DEVOPS"
 
 }
 variable "vm_datastore_data" {
    description ="datastore for new vm data disks"
    type = string
-   default =  "Data"
+   default =  "INB_DATA_DEVOPS"
 
 }
 variable "vm_network" {
@@ -54,7 +55,7 @@ variable "vm_network" {
    type = map
    default =  {
      name = "VLAN101"
-     addr = "10.36.52.150"
+     addr = "10.36.52.187"
      mask = "25"
      gateway = "10.36.52.129"
    }
@@ -85,7 +86,7 @@ variable "dns_domain" {
 variable "host_name" {
    description =" the hostname info"
    type = string
-   default = "terraform-test"
+   default = "jennings-terraform"
 
 }
 
@@ -98,9 +99,9 @@ variable "timezone" {
 }
 
 variable  "devices_resize"{
-    description =" the devices or filesystempath to reisze " 
+    description =" the devices or filesystem path to reisze " 
     type = list
-    default = ["/","/dev/sda2"]
+    default = ["/dev/sda2"]
 }
 
 variable "installed_packages" {

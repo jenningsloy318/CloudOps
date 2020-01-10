@@ -12,7 +12,7 @@ users:
 chpasswd:
     expire: false
     list: 
-    - test:${vscloud_password}
+    - vscloud:${vscloud_password}
 timezone: ${timezone}
 ntp:
   enabled: true
@@ -23,22 +23,29 @@ ntp:
 
 manage_resolv_conf: true 
 resolv_conf:
-    nameservers: [ %{ for addr in nameservers ~}
-    ${addr},
-    %{ endfor ~} ] 
     domain: ${domain}
+    nameservers: 
+    %{ for addr in nameservers ~}
+      - ${addr}
+    %{ endfor ~}
+
+    
+
 growpart:
   mode: growpart
-  devices: [ %{ for device in devices_resize ~}
-             ${device},
-             %{ endfor ~}]
+  devices: 
+  %{ for device in devices_resize ~}
+    - ${device}
+  %{ endfor ~}
+
 resize_rootfs: true
 preserve_hostname: false
 manage_etc_hosts: true
 
 packages: 
-            %{ for package in packages ~}
-            -  ${package}
-             %{ endfor ~}
-hostname: "${host_name}.${dns_domain}"
-fqdn: "${host_name}.${dns_domain}
+%{ for package in packages ~}
+  -  ${package}
+%{ endfor ~}
+
+hostname: ${host_name}.${dns_domain}
+fqdn: ${host_name}.${dns_domain}
