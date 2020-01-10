@@ -132,6 +132,8 @@ Name:           DC1-DMZ-WAF-PROD01
 # Provision VM with configured template
 1.  [Terraform](examples/terraform) demonstrates the terraform role to provision vm, VM network is configured by terraform which invokes vsphere api 
     - modify `variables.tf` to fit the require and then execute `terraform apply` to provision new vm
+    - v1 shows the example to set network info within terraform which actually calls vsphere api achieve
+    - v2 shows the example to set network info via cloud-init metadata
 2. [Ansible](examples/ansible) demonstrates ansible role to  provision VM
     - create a ansible playbook to include the ansible to to provision new vm
       ```yaml
