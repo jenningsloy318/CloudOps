@@ -1,17 +1,17 @@
 variable "vsphere_server" {
    description ="vsphere server address"
    type = string
-   default =  "10.36.51.11"
+   default =  ""
 }
 variable "vsphere_user" {
    description ="vsphere server user name"
    type = string
-   default =  "administrator@sapcae.com"
+   default =  ""
 }
 variable "vsphere_password" {
    description ="vsphere server user name"
    type = string
-   default =  "Devops#2019"
+   default =  ""
 }
 
 variable "vm_datacenter" {
@@ -35,7 +35,7 @@ variable "vm_folder" {
 variable "vm_template" {
    description ="vm template this vm will be created from"
    type = string
-   default =  "RHEL74_TEMPLATE2"
+   default =  "RHEL74-TEMPLATE2"
 }
 
 variable "vm_datastore_os" {

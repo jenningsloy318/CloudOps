@@ -29,8 +29,6 @@ resolv_conf:
       - ${addr}
     %{ endfor ~}
 
-    
-
 growpart:
   mode: growpart
   devices: 
@@ -39,7 +37,6 @@ growpart:
   %{ endfor ~}
 
 resize_rootfs: true
-preserve_hostname: false
 manage_etc_hosts: true
 
 packages: 
@@ -47,5 +44,3 @@ packages:
   -  ${package}
 %{ endfor ~}
 
-hostname: ${host_name}.${dns_domain}
-fqdn: ${host_name}.${dns_domain}

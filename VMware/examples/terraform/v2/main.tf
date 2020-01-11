@@ -6,6 +6,8 @@ provider "vsphere" {
   # If you have a self-signed cert
   allow_unverified_ssl = true
 }
+
+
 resource "vsphere_virtual_machine" "instance" {
   name             = var.host_name
   resource_pool_id = data.vsphere_resource_pool.pool.id
@@ -39,9 +41,9 @@ resource "vsphere_virtual_machine" "instance" {
     client_device = true
   }
 
-
+  wait_for_guest_net_timeout = 0
   extra_config = { 
-    "guestinfo.metadata" = data.template_cloudinit_config.metadata.rendered  
+    "guestinfo.metadata" = base64gzip(data.template_file.metadata.rendered)
     "guestinfo.metadata.encoding" = "gzip+base64"
     "guestinfo.userdata" = data.template_cloudinit_config.userdata.rendered  
     "guestinfo.userdata.encoding" = "gzip+base64"

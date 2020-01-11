@@ -2,21 +2,19 @@ data "template_cloudinit_config" "userdata" {
   gzip          = true
   base64_encode = true
 
-  # Main cloud-init userdata configuration file.
+  # Main cloud-config configuration file.
   part {
     filename     = "userdata.yaml"
     content_type = "text/cloud-config"
-    content  = templatefile("${path.module}/cloudinit_userdata.tpl",{
+    content     =    templatefile("${path.module}/cloudinit_userdata.tpl", 
+      {
         vscloud_password ="$6$rounds=10000$vscloudsecretsal$gQPUKHeXQPHyofrLYKXG9HHm4KUwWXQ01HNA6ozHhszISTcoIHkx121BiCXI3zzlZMWdxreesGs3HYlCnkpB60",
         vscloud_keys = var.vscloud_keys,
         timezone = var.timezone,
-        nameservers = var.dns_servers ,
+        nameservers = var.dns_servers,
         domain=var.dns_domain,
         devices_resize= var.devices_resize,
-        packages=var.installed_packages,
-        host_name = var.host_name,
-        dns_domain = var.dns_domain
-
+        packages=var.installed_packages
    })
   }
   part {
@@ -28,22 +26,29 @@ data "template_cloudinit_config" "userdata" {
   }
 }
 
+data "template_file" "netconfig" {
+  template = "${file("${path.module}/cloudinit_netconfig.tpl")}"
 
-data "template_cloudinit_config" "metadata" {
-  gzip          = true
-  base64_encode = true
+  vars ={
+    vm_network_addr = var.vm_network["addr"]
+    vm_network_mask = var.vm_network["mask"]
+    vm_network_gateway = var.vm_network["gateway"]
+  }
+}
 
-  # Main cloud-init metadata configuration file.
-  part {
-    filename     = "metadata.yaml"
-    content_type = "text/cloud-config"
-    content     =    templatefile("${path.module}/cloudinit_metadata.tpl", 
-      {
-        host_name = var.host_name,
-        dns_domain = var.dns_domain,
-        vm_network = var.vm_network
 
-   })
+data "template_file" "metadata" {
+
+    template     =    "${file("${path.module}/cloudinit_metadata.tpl")}"
+    vars = {
+        host_name = var.host_name
+        dns_domain = var.dns_domain
+        
+        #vm_network_addr = var.vm_network["addr"]
+        #vm_network_mask = var.vm_network["mask"]
+        #vm_network_gateway = var.vm_network["gateway"]
+
+        netconfig = base64gzip(data.template_file.netconfig.rendered)
   }
 }
 
