@@ -66,10 +66,15 @@ Name:           DC1-DMZ-WAF-PROD01
 
 1.1 install required packages and upgrade system to the latest
   ```sh
-  yum install -y cloud-init cloud-utils-growpart  https://github.com/akutz/cloud-init-vmware-guestinfo/releases/download/v1.1.0/cloud-init-vmware-guestinfo-1.1.0-1.el7.noarch.rpm lvm2 cloud-utils
+  yum install -y cloud-init cloud-utils-growpart  https://github.com/akutz/cloud-init-vmware-guestinfo/releases/download/v1.1.0/cloud-init-vmware-guestinfo-1.1.0-1.el7.noarch.rpm lvm2 cloud-utils python-netifaces
   yum update -y
   ```
+ for `cloud-init-vmware-guestinfo` v1.2.0, extral package required, enable epel repo.
 
+ ```
+ yum install python2-pip -y 
+ pip2 install deepmerge
+ ```
 1.2 clean system settings
   ```sh
   #!/bin/bash
@@ -133,9 +138,9 @@ Name:           DC1-DMZ-WAF-PROD01
 1.  [Terraform](examples/terraform) demonstrates the terraform role to provision vm, VM network is configured by terraform which invokes vsphere api 
     - modify `variables.tf` to fit the require and then execute `terraform apply` to provision new vm
     - v1 shows the example to set network info within terraform which actually calls vsphere api achieve
-    - v2 shows the example to set network info via cloud-init metadata, if using this one, 
-      > - VM templates shoud remove file `/etc/cloud/cloud.cfg.d/06-network.cfg` to enable cloudinit configure the network; 
-      > - VM templates should install  `cloud-init-vmware-guestinfo` 1.1.0, new versions are not tested
+    - v2 shows the example to set network info via cloud-init metadata with json format
+    - v3 shows the example to set network info via cloud-init metadata with yaml formated metadata; `cloud-init-vmware-guestinfo` v1.2.0 support both `json` and `yaml` fortmat metadata.
+
 2. [Ansible](examples/ansible) demonstrates ansible role to  provision VM
     - create a ansible playbook to include the ansible to to provision new vm
       ```yaml
@@ -153,6 +158,31 @@ Name:           DC1-DMZ-WAF-PROD01
         - vm_list:
           - {'vm_name': 'dc1-vm-hana-exporter-prod03','domain': 'inb.cnsgas.com','template': 'RHEL74-TEMPLATE','vm_folder': '/DC1/vm/DevOps','vm_resource_pool': 'DevOps','vm_cluster': "APP-Cluster01", disks: [{'size_gb': 100, 'datastore': 'INB_DATA_DEVOPS'}],'vm_memory_size': '4096','vm_cpu_count': '2',networks: [{'name': 'VLAN101','ip': '10.36.52.162','netmask': '255.255.255.192','gateway': '10.36.52.129'}]
         ```
+
+3. for network config, we can also pass the config through metadat with a network config 
+  - cloudinit_metadata_netconfig.yaml, and encode it as gzip+base64 format
+    ```yaml
+    version: 1	
+    config:	
+    - type: physical	
+      name: ens192	
+      subnets:	
+      - type: static	
+        address: 10.36.52.150/25	
+        gateway:  10.36.52.129	
+        dns_nameservers:	
+        - 120.25.115.20	
+        - 203.107.6.88	
+    ```
+  - metadata.json, also encode it as gzip+base64
+    ```json
+    {	
+      "network": "${networ-config}",	
+      "network.encoding": "gzip+base64",	
+      "instance-id": "vscloud-vm",	
+      "local-hostname": "dc1-vm-myprometheus-prod01.lmy.com"	
+    }
+    ```
 
   -  pass the metadata.json encoded string to `guestinfo.metadata`  and  `guestinfo.metadata.encoding` to `terraform` `extra_config` or `ansible` `customvalues`
 # export and import VM via ovftool
