@@ -15,9 +15,15 @@ resource "vsphere_virtual_machine" "instance" {
   datastore_id     = data.vsphere_datastore.datastore_os.id
 
   num_cpus = "4"
+  cpu_hot_add_enabled = true
+  cpu_hot_remove_enabled = true
+
   memory   = "8192"
+  memory_hot_add_enabled = true
+
   guest_id = data.vsphere_virtual_machine.template.guest_id
 
+  
   scsi_type = data.vsphere_virtual_machine.template.scsi_type
 
   network_interface {
