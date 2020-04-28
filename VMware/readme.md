@@ -8,7 +8,7 @@ Multiple tools can be used to manage vsphere
 ---
 ## 1. create env  and source the env 
 ```conf
-export GOVC_URL= 
+export GOVC_URL=https://host/sdk
 export GOVC_USERNAME='administrator@vc.local'
 export GOVC_PASSWORD='pass'
 export GOVC_INSECURE=true
