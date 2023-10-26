@@ -31,7 +31,7 @@
 
     - logstash to Monasca API
     - fluentd to Monasca API
-
+    - fluent-bit with [golang-output-plugins](https://github.com/fluent/fluent-bit-go)
 ## Prometheus
 
 - server: prometheus
