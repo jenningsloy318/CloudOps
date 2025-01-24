@@ -41,3 +41,16 @@ users:
 ```sh
 # virt-install  -n logstash  --import --description "logstash "  --os-type=Linux  --os-variant=centos7.0  --ram=4086 --vcpus=2  --disk path=/data/VMs/logstash/os.qcow2,bus=virtio --disk path=/data/VMs/logstash/data.qcow2,bus=virtio  --disk path=/data/VMs/logstash/cidata.iso,device=cdrom  --network network:ovs-network --graphics none  
 ```
+3. Manage Snapshots
+    - Create snapshot for a running VM
+    ```
+    virsh snapshot-create-as --domain logstash --name "logstash-snap-01" --description "Snapshot before upgrading" --live
+    virsh snapshot-list --domain logstash
+
+    ```
+    - revert snapshot
+
+    ```
+    virsh shutdown --domain logstash
+    virsh snapshot-revert --domain logstash --snapshotname logstash-snap-01 --running
+    ```
